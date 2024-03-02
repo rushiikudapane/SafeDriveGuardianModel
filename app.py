@@ -1,6 +1,7 @@
 from flask import Flask, request
-import cv2
+import cv2 
 import numpy as np
+import base64
 from keras.models import load_model
 
 model = load_model('models/cnnCat2.h5')
@@ -10,11 +11,10 @@ app = Flask(__name__)
 model = load_model('models/cnncat2.h5')
 
 score = 0
-THRESHOLD_SCORE = 20
 
-face = cv2.CascadeClassifier('haar cascade files/haarcascade_frontalface_alt.xml')
-leye = cv2.CascadeClassifier('haar cascade files/haarcascade_lefteye_2splits.xml')
-reye = cv2.CascadeClassifier('haar cascade files/haarcascade_righteye_2splits.xml')
+face = cv2.CascadeClassifier('essentails/haarcascade_frontalface_alt.xml')
+leye = cv2.CascadeClassifier('essentails/haarcascade_lefteye_2splits.xml')
+reye = cv2.CascadeClassifier('essentails/haarcascade_righteye_2splits.xml')
 
 font = cv2.FONT_HERSHEY_COMPLEX_SMALL
 rpred = [99]
@@ -24,7 +24,7 @@ def detect_drowsiness(frame):
     global score
     global rpred, lpred
 
-    height, width = frame.shape[:2]
+    # height, width = frame.shape[:2]
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -32,7 +32,7 @@ def detect_drowsiness(frame):
     left_eye = leye.detectMultiScale(gray)
     right_eye = reye.detectMultiScale(gray)
 
-    cv2.rectangle(frame, (0, height - 50), (200, height), (0, 0, 0), thickness=cv2.FILLED)
+    # cv2.rectangle(frame, (0, height - 50), (200, height), (0, 0, 0), thickness=cv2.FILLED)
 
     for (x, y, w, h) in faces:
         cv2.rectangle(frame, (x, y), (x + w, y + h), (100, 100, 100), 1)
@@ -57,36 +57,51 @@ def detect_drowsiness(frame):
 
     if rpred[0] == 0 and lpred[0] == 0:
         score += 1
-        cv2.putText(frame, "Closed", (10, height - 20), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
+        # cv2.putText(frame, "Closed", (10, height - 20), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
     else:
         score -= 1
-        cv2.putText(frame, "Open", (10, height - 20), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
+        # cv2.putText(frame, "Open", (10, height - 20), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
 
     # Ensure score doesn't go below 0
     score = max(0, score)
 
-    return frame
+    return score
 
+
+def decode_image_string(image_string):
+    # Convert base64 string to byte array
+    image_bytes = base64.b64decode(image_string)
+    # Convert byte array to numpy array
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    # Decode the image
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    return frame
 
 
 @app.route('/predict', methods=['POST'])
 def predict():
+
     
-    image_file = request.files.get('image')
+    print("Request Object: ", request.form['image'])
+
+    image_file = request.form["image"]
 
     if not image_file:
         return 'No image found', 400
     
-    frame = detect_drowsiness(image_file)
+    frame = decode_image_string(image_file)
+    final_score = detect_drowsiness(frame)
 
-    # Check if the score exceeds the threshold
-    if score > THRESHOLD_SCORE:
-        # Trigger an alert (you can add your own alert mechanism here)
-        print("Drowsiness detected! Triggering alert.")
+    # Check if the score exceeds the threshol
 
-    return {'score': score}
+    return {'score': final_score}
 
+@app.route('/', methods=['GET'])
+def start():
+    print("Server Working")
+    return {"name": "rushiraj"}
 
 
 if __name__ == '__main__':
+    print("Server Started!!!")
     app.run(debug=True, port=3000)
